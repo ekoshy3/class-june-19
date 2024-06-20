@@ -1,0 +1,20 @@
+project:
+  type: website
+
+website:
+  title: "."
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - about.qmd
+      - class-june-19.qmd
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+
+
+
