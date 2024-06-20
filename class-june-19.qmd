@@ -6,3 +6,91 @@ execute:
   message: false
 ---
 
+```{r}
+#| message: false
+#| output: false
+# Load required libraries
+library(tidycensus)
+library(leaflet)
+library(dplyr)
+library(sf)
+library(htmlwidgets)
+library(webshot)
+
+# Set your Census API key
+census_api_key("000c3195a8d59acc046ef13aad47b2c2ceb2386f")
+
+# Fetch ACS data for bachelor's degrees in Los Angeles County tracts
+la_education <- get_acs(geography = "tract", 
+                        state = "CA",
+                        county = "Los Angeles County",
+                        year = 2021, 
+                        survey = "acs5",
+                        variables = "B15003_022",  # Bachelor's degrees
+                        geometry = TRUE)
+
+# Rename the estimate column to a more meaningful name
+names(la_education)[names(la_education) == "estimate"] <- "bachelors_count"
+
+# Define a custom color palette (example using viridis colors)
+color_palette <- viridisLite::viridis(5)
+
+# Create breaks and labels for the legend
+breaks <- quantile(la_education$bachelors_count, probs = seq(0, 1, by = 0.2), na.rm = TRUE)
+labels <- c("Lowest", "Low", "Medium", "High", "Highest")
+
+# Check current projection
+current_crs <- st_crs(la_education)$proj4string
+is_wgs84 <- identical(current_crs, "+proj=longlat +datum=WGS84")
+
+# Transform to WGS84 if not already in WGS84
+if (!is_wgs84) {
+  la_education <- st_transform(la_education, 4326)  # 4326 is EPSG code for WGS84
+}
+
+# Function to assign colors based on bachelors_count
+assign_color <- function(count) {
+  # Example: Assign colors based on quantiles
+  ifelse(count <= breaks[2], color_palette[1],
+         ifelse(count <= breaks[3], color_palette[2],
+                ifelse(count <= breaks[4], color_palette[3],
+                       ifelse(count <= breaks[5], color_palette[4],
+                              color_palette[5]))))
+}
+
+# Apply color function to create a color column
+la_education$fill_color <- sapply(la_education$bachelors_count, assign_color)
+
+# Create Leaflet map
+map <- leaflet(data = la_education) %>%
+  addProviderTiles("CartoDB.Positron", 
+                   options = providerTileOptions(preload = Inf, updateWhenIdle = TRUE)) %>%
+  addPolygons(fillColor = ~fill_color,
+              fillOpacity = 0.7,
+              color = "#BDBDC3",
+              weight = 1,
+              popup = ~paste("Tract ID:", GEOID, "<br>",
+                             "Bachelor's Degrees:", bachelors_count)) %>%
+  addLegend("bottomright",
+            colors = color_palette,
+            labels = labels,
+            title = "Bachelor's Degrees",
+            opacity = 0.7) %>%
+  setView(lng = -118.25, lat = 34.05, zoom = 10)  # Set initial view to Los Angeles
+
+# Save Leaflet map as HTML
+map_html <- "leaflet_map.html"
+saveWidget(map, file = map_html, selfcontained = TRUE)
+
+# Convert HTML to SVG using webshot (if necessary, adjust cliprect for your map size)
+map_svg <- "leaflet_map.svg"
+webshot(map_html, file = map_svg, cliprect = "viewport")
+
+# Display the captured SVG path
+cat("Leaflet map saved as SVG:", map_svg, "\n")
+
+```
+```{r}
+
+```
+
